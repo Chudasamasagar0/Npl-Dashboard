@@ -46,6 +46,14 @@ const sentimentMap = {
   },
 };
 
+function normalizeLabel(label) {
+  if (!label) return 'Neutral';
+  const key = label.trim().toUpperCase();
+  if (key === 'POSITIVE') return 'Positive';
+  if (key === 'NEGATIVE') return 'Negative';
+  return 'Neutral';
+}
+
 function extractKeywords(text) {
   const normalized = text
     .toLowerCase()
@@ -121,27 +129,32 @@ function App() {
   const [preview, setPreview] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  const [uploadSummary, setUploadSummary] = useState(null);
+  const [fileUploading, setFileUploading] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('All');
   const previewRef = useRef(null);
 
   const analyzeText = async (inputText) => {
-    const words = inputText
-      .toLowerCase()
-      .replace(/[^a-z\s]/g, ' ')
-      .split(/\s+/)
-      .filter(Boolean);
-
-    const positiveTerms = ['amazing', 'excellent', 'love', 'great', 'happy', 'pleased', 'smooth', 'fast', 'delight', 'optimal', 'reliable', 'secure'];
-    const negativeTerms = ['bad', 'slow', 'frustrating', 'poor', 'hate', 'error', 'issue', 'delay', 'bug', 'confusing', 'broken', 'unreliable'];
-
-    const positiveCount = words.filter((word) => positiveTerms.includes(word)).length;
-    const negativeCount = words.filter((word) => negativeTerms.includes(word)).length;
-    const score = Math.max(0, Math.min(1, (positiveCount + 1 - negativeCount) / (words.length * 0.25 + 1)));
-    const sentimentLabel = score >= 0.6 ? 'Positive' : score <= 0.4 ? 'Negative' : 'Neutral';
     const keywords = extractKeywords(inputText);
+    const response = await fetch('http://127.0.0.1:5000/analyze', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: inputText }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(errorData?.error || 'Unable to connect to backend API');
+    }
+
+    const data = await response.json();
+    const modelOutput = Array.isArray(data) ? data[0] : data;
+    const sentimentLabel = normalizeLabel(modelOutput?.label);
+    const score = typeof modelOutput?.score === 'number' ? modelOutput.score : 0.5;
     const meta = getSentimentMeta(sentimentLabel, score);
 
     return {
@@ -154,6 +167,37 @@ function App() {
       keywords,
       emotions: detectEmotions(inputText),
     };
+  };
+
+  const handleUploadFile = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setError(null);
+    setFileUploading(true);
+    setUploadSummary(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const response = await fetch('http://127.0.0.1:5000/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'CSV upload failed');
+      }
+
+      const data = await response.json();
+      setUploadSummary(data);
+    } catch (err) {
+      setError(err.message || 'CSV upload failed');
+    } finally {
+      setFileUploading(false);
+    }
   };
 
   const handleAnalyze = async () => {
@@ -183,11 +227,9 @@ function App() {
 
     if (!text.trim()) {
       setPreview(null);
-      setPreviewLoading(false);
       return;
     }
 
-    setPreviewLoading(true);
     previewRef.current = window.setTimeout(async () => {
       try {
         const analysis = await analyzeText(text);
@@ -195,7 +237,7 @@ function App() {
       } catch {
         setPreview(null);
       } finally {
-        setPreviewLoading(false);
+        
       }
     }, 700);
 
@@ -339,7 +381,7 @@ function App() {
           </div>
         )}
 
-        <div className="grid gap-6 xl:grid-cols-[1.4fr_0.9fr]">
+        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.9fr]">
           <div className="space-y-6">
             <motion.section
               initial={{ opacity: 0, y: 24 }}
@@ -347,14 +389,29 @@ function App() {
               transition={{ duration: 0.7, delay: 0.05 }}
               className="rounded-[2rem] border border-slate-700/70 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/40 backdrop-blur-xl"
             >
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                 <div>
                   <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Sentiment distribution</p>
-                  <h2 className="mt-3 text-2xl font-semibold text-white">Engagement chart overview</h2>
+                  <h2 className="mt-3 text-3xl font-semibold text-white">Engagement chart overview</h2>
+                  <p className="mt-4 max-w-2xl text-slate-400">Monitor sentiment trends and customer feedback performance across your dataset.</p>
                 </div>
-                <p className="text-sm text-slate-400">Interactive analytics for fast stakeholder reporting.</p>
+                <div className="flex flex-col gap-4 items-end">
+                  <div className="rounded-[1.25rem] border border-slate-700/80 bg-slate-950/90 w-24 h-24 flex flex-col items-center justify-center">
+                    <p className="text-xs uppercase tracking-widest text-slate-500">Analyses</p>
+                    <p className="mt-2 text-2xl font-bold text-white">{history.length}</p>
+                  </div>
+                  <div className="rounded-[1.25rem] border border-slate-700/80 bg-slate-950/90 w-24 h-24 flex flex-col items-center justify-center">
+                    <p className="text-xs uppercase tracking-widest text-slate-500">Positive</p>
+                    <p className="mt-2 text-2xl font-bold text-emerald-400">{distribution[0].value}</p>
+                  </div>
+                  <div className="rounded-[1.25rem] border border-slate-700/80 bg-slate-950/90 w-24 h-24 flex flex-col items-center justify-center">
+                    <p className="text-xs uppercase tracking-widest text-slate-500">Negative</p>
+                    <p className="mt-2 text-2xl font-bold text-orange-400">{distribution[1].value}</p>
+                  </div>
+                </div>
               </div>
-              <div className="mt-8 grid gap-6 lg:grid-cols-2">
+
+              <div className="mt-10 grid gap-6 lg:grid-cols-2">
                 <div className="rounded-[1.75rem] border border-slate-700/80 bg-slate-950/90 p-6">
                   <ResponsiveContainer width="100%" height={320}>
                     <PieChart>
@@ -416,114 +473,143 @@ function App() {
             </motion.section>
           </div>
 
-          <motion.section
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.15 }}
-            className="rounded-[2rem] border border-slate-700/70 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/40 backdrop-blur-xl"
-          >
-            <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-              <div>
-                <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Feedback Analyzer</p>
-                <h2 className="mt-3 text-3xl font-semibold text-white">Enterprise sentiment workflows</h2>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => setText('')}
-                  className="rounded-full border border-slate-700/80 bg-slate-950/90 px-5 py-3 text-sm font-medium text-slate-100 transition hover:border-slate-400/50 hover:bg-slate-800"
-                >
-                  Clear Input
-                </button>
-                <button
-                  type="button"
-                  onClick={handleAnalyze}
-                  disabled={loading}
-                  className="rounded-full bg-gradient-to-r from-sky-400 to-violet-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-500/20 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  {loading ? 'Analyzing...' : 'Analyze Sentiment'}
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-8 space-y-6">
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="Paste customer review, survey feedback, or support comment..."
-                className="min-h-[280px] w-full rounded-[1.75rem] border border-slate-700/80 bg-slate-950/90 px-6 py-5 text-base leading-7 text-slate-100 outline-none ring-1 ring-slate-700/40 transition focus:border-sky-400/70 focus:ring-2 focus:ring-sky-500/20"
-              />
-              <p className="text-sm text-slate-400">
-                Live typing preview helps you validate sentiment before submitting the final analysis.
-              </p>
-            </div>
-
-            <div className="mt-10 grid gap-6 xl:grid-cols-2">
-              <div className="rounded-[1.75rem] border border-slate-700/80 bg-slate-950/90 p-6">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Real-time preview</p>
-                  <span className="text-sm text-slate-400">{previewLoading ? 'Analyzing...' : 'Auto-updates while typing'}</span>
+          <div className="space-y-6">
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.1 }}
+              className="rounded-[2rem] border border-slate-700/70 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/40 backdrop-blur-xl"
+            >
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Feedback Analyzer</p>
+                  <h2 className="mt-3 text-3xl font-semibold text-white">Enterprise sentiment workflows</h2>
                 </div>
-                {preview ? (
-                  <div className="mt-6 space-y-4">
-                    <div className="flex items-center gap-4">
-                      <div
-                        className="grid h-14 w-14 place-content-center rounded-3xl text-2xl"
-                        style={{ background: `${preview.color}20`, color: preview.color }}
-                      >
-                        {preview.icon}
-                      </div>
-                      <div>
-                        <p className="text-xl font-semibold text-white">{preview.label}</p>
-                        <p className="text-sm text-slate-400">Confidence {preview.confidence}%</p>
-                      </div>
-                    </div>
-                    <p className="text-slate-300">{preview.explanation}</p>
-                    <div className="rounded-full bg-slate-800/80 p-1">
-                      <div
-                        className="h-3 rounded-full"
-                        style={{ width: `${preview.confidence}%`, background: preview.color }}
-                      />
-                    </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setText('')}
+                    className="rounded-full border border-slate-700/80 bg-slate-950/90 px-5 py-3 text-sm font-medium text-slate-100 transition hover:border-slate-400/50 hover:bg-slate-800"
+                  >
+                    Clear Input
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAnalyze}
+                    disabled={loading}
+                    className="rounded-full bg-gradient-to-r from-sky-400 to-violet-500 px-6 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-sky-500/20 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {loading ? 'Analyzing...' : 'Analyze Sentiment'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-8 space-y-6">
+                <textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Paste customer review, survey feedback, or support comment..."
+                  className="min-h-[220px] w-full rounded-[1.75rem] border border-slate-700/80 bg-slate-950/90 px-6 py-5 text-base leading-7 text-slate-100 outline-none ring-1 ring-slate-700/40 transition focus:border-sky-400/70 focus:ring-2 focus:ring-sky-500/20"
+                />
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="rounded-[1.75rem] border border-slate-700/80 bg-slate-950/90 p-5">
+                    <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Live Preview</p>
+                    <p className="mt-4 text-xl font-semibold text-white">{preview ? preview.label : 'Ready'}</p>
+                    <p className="mt-2 text-sm text-slate-400">Auto-updates while typing</p>
                   </div>
-                ) : (
-                  <div className="mt-6 rounded-[1.75rem] border border-dashed border-slate-700/80 p-8 text-center text-slate-500">
-                    Start typing text to receive sentiment predictions and insights instantly.
+                  <div className="rounded-[1.75rem] border border-slate-700/80 bg-slate-950/90 p-5">
+                    <p className="text-sm uppercase tracking-[0.25em] text-slate-500">CSV Batch Upload</p>
+                    <p className="mt-4 text-sm text-slate-400">Upload a CSV with a <code className="rounded bg-slate-900 px-1 py-0.5 text-xs">text</code> column.</p>
+                    <input
+                      type="file"
+                      accept=".csv"
+                      onChange={handleUploadFile}
+                      disabled={fileUploading}
+                      className="mt-4 w-full rounded-3xl border border-slate-700/80 bg-slate-900/90 px-4 py-3 text-sm text-slate-100 outline-none transition focus:border-sky-400/70 focus:ring-2 focus:ring-sky-500/20"
+                    />
+                  </div>
+                </div>
+
+                {uploadSummary && (
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="rounded-[1.5rem] border border-slate-700/80 bg-slate-900/90 p-4 text-center">
+                      <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Total rows</p>
+                      <p className="mt-3 text-3xl font-semibold text-white">{uploadSummary.total_records}</p>
+                    </div>
+                    <div className="rounded-[1.5rem] border border-slate-700/80 bg-slate-900/90 p-4 text-center">
+                      <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Positive</p>
+                      <p className="mt-3 text-3xl font-semibold text-emerald-400">{uploadSummary.positive}</p>
+                    </div>
+                    <div className="rounded-[1.5rem] border border-slate-700/80 bg-slate-900/90 p-4 text-center">
+                      <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Negative</p>
+                      <p className="mt-3 text-3xl font-semibold text-orange-400">{uploadSummary.negative}</p>
+                    </div>
                   </div>
                 )}
               </div>
+            </motion.section>
 
-              <div className="rounded-[1.75rem] border border-slate-700/80 bg-slate-950/90 p-6">
+            <motion.section
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.15 }}
+              className="rounded-[2rem] border border-slate-700/70 bg-slate-900/80 p-6 shadow-2xl shadow-slate-950/40 backdrop-blur-xl"
+            >
+              <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Keyword extraction</p>
-                  <p className="text-sm text-slate-400">Top insights</p>
+                  <div>
+                    <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Insights</p>
+                    <h3 className="mt-2 text-2xl font-semibold text-white">Preview & keywords</h3>
+                  </div>
+                  <span className="text-sm text-slate-400">Fast feedback summary</span>
                 </div>
-                <div className="mt-6 flex flex-wrap gap-3">
-                  {(preview?.keywords || current?.keywords || []).map((keyword) => (
-                    <span
-                      key={keyword.word}
-                      className="rounded-full border border-slate-700/80 bg-slate-900/90 px-4 py-2 text-sm text-slate-100 shadow-sm shadow-slate-950/20"
-                    >
-                      {keyword.word}
-                    </span>
-                  ))}
-                </div>
-                <div className="mt-6 space-y-4">
-                  {(preview?.emotions || current?.emotions || []).map((item) => (
-                    <div key={item.name} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm text-slate-400">
-                        <span>{item.name}</span>
-                        <span>{item.value}%</span>
+
+                <div className="grid gap-4">
+                  <div className="rounded-[1.75rem] border border-slate-700/80 bg-slate-950/90 p-5">
+                    <div className="flex items-center gap-4">
+                      <div
+                        className="grid h-14 w-14 place-content-center rounded-3xl text-2xl"
+                        style={{ background: `${preview?.color || '#94a3af'}20`, color: preview?.color || '#94a3af' }}
+                      >
+                        {preview?.icon || '🔍'}
                       </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-                        <div className="h-full rounded-full bg-gradient-to-r from-sky-400 to-violet-500" style={{ width: `${item.value}%` }} />
+                      <div>
+                        <p className="text-xl font-semibold text-white">{preview ? preview.label : 'Awaiting input'}</p>
+                        <p className="text-sm text-slate-400">{preview ? `Confidence ${preview.confidence}%` : 'Type in the feedback box to preview results.'}</p>
                       </div>
                     </div>
-                  ))}
+                    {preview && (
+                      <div className="mt-4 space-y-3">
+                        <p className="text-slate-300">{preview.explanation}</p>
+                        <div className="h-3 overflow-hidden rounded-full bg-slate-800">
+                          <div className="h-full rounded-full bg-gradient-to-r from-sky-400 to-violet-500" style={{ width: `${preview.confidence}%` }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-[1.75rem] border border-slate-700/80 bg-slate-950/90 p-5">
+                    <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Keywords</p>
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      {(preview?.keywords || current?.keywords || []).length ? (
+                        (preview?.keywords || current?.keywords || []).map((keyword) => (
+                          <span
+                            key={keyword.word}
+                            className="rounded-full border border-slate-700/80 bg-slate-900/90 px-4 py-2 text-sm text-slate-100 shadow-sm shadow-slate-950/20"
+                          >
+                            {keyword.word}
+                          </span>
+                        ))
+                      ) : (
+                        <p className="text-sm text-slate-500">Keywords will appear here after analysis.</p>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          </motion.section>
+            </motion.section>
+          </div>
         </div>
 
         <motion.section
