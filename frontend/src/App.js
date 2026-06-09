@@ -46,6 +46,60 @@ const sentimentMap = {
     icon: '😐',
   },
 };
+const NEUTRAL_PHRASES = [
+  'okay', 'ok', 'fine', 'normal', 'nothing special', 'average', 'moderate', 'so-so', 'just okay', 'decent'
+];
+
+const POSITIVE_WORDS = [
+  'love', 'great', 'excellent', 'wonderful', 'fantastic', 'amazing', 'best', 'awesome', 'good', 'happy', 'pleased', 'perfect', 'perfectly', 'recommend', 'highly'
+];
+
+const NEGATIVE_WORDS = [
+  'worst', 'bad', 'terrible', 'disappointed', 'disappointment', 'crash', 'crashing', 'broken', 'useless', 'unusable', 'poor', 'hate', 'annoyed', 'frustrated', 'ridiculous', 'upset', 'fail', 'failed'
+];
+
+function isLinguisticallyNeutral(text) {
+  if (!text) return true;
+  const cleanText = text.toLowerCase().trim();
+  
+  // 1. If it contains explicitly neutral phrases
+  for (const phrase of NEUTRAL_PHRASES) {
+    if (cleanText.includes(phrase)) {
+      return true;
+    }
+  }
+  
+  // 2. Check if it's a scheduling/factual statement (objective)
+  const objectivePatterns = [
+    /\b(schedule|scheduled|meeting|appointment|tomorrow|today|yesterday|date|time|clock|calendar)\b/i,
+    /\b(file|report|document|attachment|pdf|csv)\b/i,
+    /\b(status|info|information|details)\b/i,
+    /\b(is attached|has been sent|is scheduled|please find)\b/i
+  ];
+  
+  const hasObjectiveContext = objectivePatterns.some(pattern => pattern.test(cleanText));
+  
+  // 3. Count positive and negative words
+  const words = cleanText.replace(/[^a-z\s]/g, ' ').split(/\s+/);
+  let positiveCount = 0;
+  let negativeCount = 0;
+  
+  words.forEach(word => {
+    if (POSITIVE_WORDS.includes(word)) positiveCount++;
+    if (NEGATIVE_WORDS.includes(word)) negativeCount++;
+  });
+  
+  // If there are no positive or negative words, OR if it has objective context and very low emotion, it's Neutral
+  if (positiveCount === 0 && negativeCount === 0) {
+    return true;
+  }
+  
+  if (hasObjectiveContext && positiveCount <= 1 && negativeCount === 0) {
+    return true;
+  }
+  
+  return false;
+}
 
 function normalizeLabel(label) {
   if (!label) return 'Neutral';
@@ -151,14 +205,20 @@ function App() {
 
     const data = await response.json();
     const modelOutput = Array.isArray(data) ? data[0] : data;
-    const sentimentLabel = normalizeLabel(modelOutput?.label);
-    const score = typeof modelOutput?.score === 'number' ? modelOutput.score : 0.5;
+    let sentimentLabel = normalizeLabel(modelOutput?.label);
+    let score = typeof modelOutput?.score === 'number' ? modelOutput.score : 0.5;
+
+    if (isLinguisticallyNeutral(inputText)) {
+      sentimentLabel = 'Neutral';
+      score = 0.50;
+    }
+
     const meta = getSentimentMeta(sentimentLabel, score);
 
     return {
       label: meta.label,
       score,
-      confidence: Math.round(Math.max(45, Math.min(98, score * 100 + 12))),
+      confidence: sentimentLabel === 'Neutral' ? 65 : Math.round(Math.max(45, Math.min(98, score * 100 + 12))),
       color: meta.color,
       icon: meta.icon,
       explanation: buildExplanation(meta.label, keywords),

@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import pandas as pd
 from transformers import pipeline
+import re
 
 app = Flask(__name__)
 CORS(app)
@@ -11,6 +12,51 @@ sentiment_pipeline = pipeline(
     "sentiment-analysis",
     model="distilbert-base-uncased-finetuned-sst-2-english"
 )
+
+NEUTRAL_PHRASES = [
+    'okay', 'ok', 'fine', 'normal', 'nothing special', 'average', 'moderate', 'so-so', 'decent'
+]
+
+POSITIVE_WORDS = [
+    'love', 'great', 'excellent', 'wonderful', 'fantastic', 'amazing', 'best', 'awesome', 'good', 'happy', 'pleased', 'perfect', 'perfectly', 'recommend', 'highly'
+]
+
+NEGATIVE_WORDS = [
+    'worst', 'bad', 'terrible', 'disappointed', 'disappointment', 'crash', 'crashing', 'broken', 'useless', 'unusable', 'poor', 'hate', 'annoyed', 'frustrated', 'ridiculous', 'upset', 'fail', 'failed'
+]
+
+def is_linguistically_neutral(text):
+    clean_text = str(text).lower().strip()
+    
+    # 1. Direct neutral phrases
+    for phrase in NEUTRAL_PHRASES:
+        if phrase in clean_text:
+            return True
+            
+    # 2. Objective context patterns
+    objective_patterns = [
+        r'\b(schedule|scheduled|meeting|appointment|tomorrow|today|yesterday|date|time|clock|calendar)\b',
+        r'\b(file|report|document|attachment|pdf|csv)\b',
+        r'\b(status|info|information|details)\b',
+        r'\b(is attached|has been sent|is scheduled|please find)\b'
+    ]
+    
+    has_objective_context = any(re.search(pattern, clean_text) for pattern in objective_patterns)
+    
+    # Clean words list
+    words = re.sub(r'[^a-z\s]', ' ', clean_text).split()
+    
+    pos_count = sum(1 for w in words if w in POSITIVE_WORDS)
+    neg_count = sum(1 for w in words if w in NEGATIVE_WORDS)
+    
+    # Factual/No emotion
+    if pos_count == 0 and neg_count == 0:
+        return True
+        
+    if has_objective_context and pos_count <= 1 and neg_count == 0:
+        return True
+        
+    return False
 
 @app.route("/")
 def home():
@@ -107,8 +153,9 @@ def upload_file():
             label = pred["label"]
             score = pred["score"]
 
-            if score < 0.60:
+            if is_linguistically_neutral(text_str) or score < 0.60:
                 label = "NEUTRAL"
+                score = 0.50
                 neutral_count += 1
             elif label == "POSITIVE":
                 positive_count += 1
