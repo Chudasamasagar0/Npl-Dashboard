@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { Download, FileText, Sparkles, TrendingUp } from 'lucide-react';
 import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 import './App.css';
 
 const STOP_WORDS = [
@@ -88,15 +89,12 @@ function detectEmotions(text) {
 }
 
 function getSentimentMeta(label, score) {
+  if (typeof score === 'number' && score < 0.60) {
+    return sentimentMap.NEUTRAL;
+  }
   const key = label?.toUpperCase();
   if (sentimentMap[key]) {
     return sentimentMap[key];
-  }
-  if (score >= 0.55) {
-    return sentimentMap.POSITIVE;
-  }
-  if (score <= 0.45) {
-    return sentimentMap.NEGATIVE;
   }
   return sentimentMap.NEUTRAL;
 }
@@ -193,10 +191,39 @@ function App() {
 
       const data = await response.json();
       setUploadSummary(data);
+
+      if (data.results && Array.isArray(data.results)) {
+        const formattedResults = data.results.map((res) => {
+          const normalizedLabel = normalizeLabel(res.label);
+          const score = typeof res.score === 'number' ? res.score : 0.5;
+          const keywords = extractKeywords(res.text);
+          const meta = getSentimentMeta(normalizedLabel, score);
+
+          const analysis = {
+            label: meta.label,
+            score,
+            confidence: Math.round(Math.max(45, Math.min(98, score * 100 + 12))),
+            color: meta.color,
+            icon: meta.icon,
+            explanation: buildExplanation(meta.label, keywords),
+            keywords,
+            emotions: detectEmotions(res.text),
+          };
+
+          return formatEntry(analysis, res.text);
+        });
+
+        setHistory((prev) => [...formattedResults, ...prev]);
+
+        if (formattedResults.length > 0) {
+          setCurrent(formattedResults[0]);
+        }
+      }
     } catch (err) {
       setError(err.message || 'CSV upload failed');
     } finally {
       setFileUploading(false);
+      event.target.value = '';
     }
   };
 
@@ -314,17 +341,153 @@ function App() {
 
   const exportPDF = () => {
     const doc = new jsPDF({ orientation: 'landscape' });
-    doc.setFontSize(20);
-    doc.text('Sentiment Analytics History', 14, 22);
+
+    // Page styling & Theme colors
+    const primaryColor = [15, 23, 42]; // Slate 900
+
+    // Title Block
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text('Sentiment Analytics Report', 14, 20);
+
+    // Subtitle
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    filteredHistory.slice(0, 10).forEach((entry, index) => {
-      const y = 32 + index * 10;
-      doc.text(entry.text.substring(0, 80), 14, y);
-      doc.text(entry.sentiment, 100, y);
-      doc.text(`${entry.confidence}%`, 136, y);
-      doc.text(entry.dateTime, 170, y);
+    doc.setTextColor(100, 116, 139); // Slate 500
+    const timestampStr = new Date().toLocaleString();
+    doc.text(`Generated: ${timestampStr} | Filter: ${filter} | Search: "${search || 'None'}"`, 14, 26);
+
+    // Divider Line
+    doc.setDrawColor(226, 232, 240); // Slate 200
+    doc.setLineWidth(0.5);
+    doc.line(14, 30, doc.internal.pageSize.width - 14, 30);
+
+    // Compute metrics
+    const total = filteredHistory.length;
+    const positive = filteredHistory.filter((entry) => entry.sentiment === 'Positive').length;
+    const negative = filteredHistory.filter((entry) => entry.sentiment === 'Negative').length;
+    const neutral = filteredHistory.filter((entry) => entry.sentiment === 'Neutral').length;
+
+    // Metrics Cards
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(71, 85, 105); // Slate 600
+
+    // Card 1: Total
+    doc.setFillColor(241, 245, 249); // Slate 100
+    doc.rect(14, 35, 60, 16, 'F');
+    doc.text('TOTAL ANALYSES', 18, 41);
+    doc.setFontSize(12);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text(total.toString(), 18, 48);
+
+    // Card 2: Positive
+    doc.setFillColor(240, 253, 244); // Emerald 50
+    doc.rect(80, 35, 60, 16, 'F');
+    doc.setFontSize(9);
+    doc.setTextColor(21, 128, 61); // Emerald 700
+    doc.text('POSITIVE SENTIMENT', 84, 41);
+    doc.setFontSize(12);
+    doc.text(positive.toString(), 84, 48);
+
+    // Card 3: Negative
+    doc.setFillColor(255, 247, 237); // Orange 50
+    doc.rect(146, 35, 60, 16, 'F');
+    doc.setFontSize(9);
+    doc.setTextColor(194, 65, 12); // Orange 700
+    doc.text('NEGATIVE SENTIMENT', 150, 41);
+    doc.setFontSize(12);
+    doc.text(negative.toString(), 150, 48);
+
+    // Card 4: Neutral
+    doc.setFillColor(248, 250, 252); // Slate 50
+    doc.rect(212, 35, doc.internal.pageSize.width - 212 - 14, 16, 'F');
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139); // Slate 500
+    doc.text('NEUTRAL SENTIMENT', 216, 41);
+    doc.setFontSize(12);
+    doc.text(neutral.toString(), 216, 48);
+
+    // Table Columns & Rows
+    const tableColumns = [
+      { header: 'Feedback Review Text', dataKey: 'text' },
+      { header: 'Sentiment', dataKey: 'sentiment' },
+      { header: 'Confidence', dataKey: 'confidence' },
+      { header: 'Timestamp', dataKey: 'dateTime' }
+    ];
+
+    const tableRows = filteredHistory.map((entry) => ({
+      text: entry.text,
+      sentiment: entry.sentiment,
+      confidence: `${entry.confidence}%`,
+      dateTime: entry.dateTime
+    }));
+
+    // Generate AutoTable
+    doc.autoTable({
+      columns: tableColumns,
+      body: tableRows,
+      startY: 57,
+      margin: { left: 14, right: 14, bottom: 20 },
+      theme: 'grid',
+      headStyles: {
+        fillColor: primaryColor,
+        textColor: [255, 255, 255],
+        fontSize: 10,
+        fontStyle: 'bold',
+        halign: 'left'
+      },
+      bodyStyles: {
+        fontSize: 9,
+        textColor: [51, 65, 85], // Slate 700
+        valign: 'middle'
+      },
+      alternateRowStyles: {
+        fillColor: [250, 250, 250]
+      },
+      columnStyles: {
+        text: { cellWidth: 'auto' },
+        sentiment: { cellWidth: 32, fontStyle: 'bold' },
+        confidence: { cellWidth: 28, halign: 'center' },
+        dateTime: { cellWidth: 48 }
+      },
+      didDrawCell: (data) => {
+        // Color code sentiment column cell text for premium feel
+        if (data.column.key === 'sentiment' && data.cell.section === 'body') {
+          const val = data.cell.raw;
+          if (val === 'Positive') {
+            doc.setTextColor(34, 197, 94); // Emerald 500
+          } else if (val === 'Negative') {
+            doc.setTextColor(249, 115, 22); // Orange 500
+          } else {
+            doc.setTextColor(148, 163, 184); // Slate 400
+          }
+        }
+      },
+      didDrawPage: (data) => {
+        // Footer: Page Number & Branding
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(148, 163, 184); // Slate 400
+        
+        // Bottom left branding
+        doc.text(
+          'NLP Sentiment Analytics Dashboard - Enterprise Report',
+          data.settings.margin.left,
+          doc.internal.pageSize.height - 10
+        );
+        
+        // Bottom right page numbering
+        doc.text(
+          `Page ${data.pageNumber}`,
+          doc.internal.pageSize.width - data.settings.margin.right - 10,
+          doc.internal.pageSize.height - 10
+        );
+      }
     });
-    doc.save('sentiment-history.pdf');
+
+    doc.save(`sentiment-analytics-report-${Date.now()}.pdf`);
   };
 
   return (
@@ -395,7 +558,7 @@ function App() {
                   <h2 className="mt-3 text-3xl font-semibold text-white">Engagement chart overview</h2>
                   <p className="mt-4 max-w-2xl text-slate-400">Monitor sentiment trends and customer feedback performance across your dataset.</p>
                 </div>
-                <div className="flex flex-col gap-4 items-end">
+                <div className="grid grid-cols-2 gap-3 xl:flex xl:flex-col xl:gap-4 items-center xl:items-end flex-wrap justify-end">
                   <div className="rounded-[1.25rem] border border-slate-700/80 bg-slate-950/90 w-24 h-24 flex flex-col items-center justify-center">
                     <p className="text-xs uppercase tracking-widest text-slate-500">Analyses</p>
                     <p className="mt-2 text-2xl font-bold text-white">{history.length}</p>
@@ -407,6 +570,10 @@ function App() {
                   <div className="rounded-[1.25rem] border border-slate-700/80 bg-slate-950/90 w-24 h-24 flex flex-col items-center justify-center">
                     <p className="text-xs uppercase tracking-widest text-slate-500">Negative</p>
                     <p className="mt-2 text-2xl font-bold text-orange-400">{distribution[1].value}</p>
+                  </div>
+                  <div className="rounded-[1.25rem] border border-slate-700/80 bg-slate-950/90 w-24 h-24 flex flex-col items-center justify-center">
+                    <p className="text-xs uppercase tracking-widest text-slate-500">Neutral</p>
+                    <p className="mt-2 text-2xl font-bold text-slate-400">{distribution[2].value}</p>
                   </div>
                 </div>
               </div>
@@ -532,7 +699,7 @@ function App() {
                 </div>
 
                 {uploadSummary && (
-                  <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                     <div className="rounded-[1.5rem] border border-slate-700/80 bg-slate-900/90 p-4 text-center">
                       <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Total rows</p>
                       <p className="mt-3 text-3xl font-semibold text-white">{uploadSummary.total_records}</p>
@@ -544,6 +711,10 @@ function App() {
                     <div className="rounded-[1.5rem] border border-slate-700/80 bg-slate-900/90 p-4 text-center">
                       <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Negative</p>
                       <p className="mt-3 text-3xl font-semibold text-orange-400">{uploadSummary.negative}</p>
+                    </div>
+                    <div className="rounded-[1.5rem] border border-slate-700/80 bg-slate-900/90 p-4 text-center">
+                      <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Neutral</p>
+                      <p className="mt-3 text-3xl font-semibold text-slate-400">{uploadSummary.neutral || 0}</p>
                     </div>
                   </div>
                 )}
