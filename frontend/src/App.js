@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Download, FileText, Sparkles, TrendingUp } from 'lucide-react';
+import { Download, FileText, Sparkles, TrendingUp, Database, Smile, Frown, Meh } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import './App.css';
@@ -694,22 +694,57 @@ function App() {
                 </div>
 
                 {uploadSummary && (
-                  <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-                    <div className="rounded-[1.5rem] border border-slate-700/80 bg-slate-900/90 p-4 text-center">
-                      <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Total rows</p>
-                      <p className="mt-3 text-3xl font-semibold text-white">{uploadSummary.total_records}</p>
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                    {/* Total Rows */}
+                    <div className="rounded-[1.75rem] border border-slate-700/70 bg-slate-950/90 p-5 shadow-xl shadow-slate-950/20">
+                      <div className="flex items-center gap-4">
+                        <span className="grid h-12 w-12 place-content-center rounded-2xl bg-sky-400/10 text-sky-300">
+                          <Database className="h-6 w-6" />
+                        </span>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Total Rows</p>
+                          <p className="mt-2 text-3xl font-bold text-white">{uploadSummary.total_records}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="rounded-[1.5rem] border border-slate-700/80 bg-slate-900/90 p-4 text-center">
-                      <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Positive</p>
-                      <p className="mt-3 text-3xl font-semibold text-emerald-400">{uploadSummary.positive}</p>
+
+                    {/* Positive */}
+                    <div className="rounded-[1.75rem] border border-slate-700/70 bg-slate-950/90 p-5 shadow-xl shadow-slate-950/20">
+                      <div className="flex items-center gap-4">
+                        <span className="grid h-12 w-12 place-content-center rounded-2xl bg-emerald-400/10 text-emerald-400">
+                          <Smile className="h-6 w-6" />
+                        </span>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Positive</p>
+                          <p className="mt-2 text-3xl font-bold text-emerald-400">{uploadSummary.positive}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="rounded-[1.5rem] border border-slate-700/80 bg-slate-900/90 p-4 text-center">
-                      <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Negative</p>
-                      <p className="mt-3 text-3xl font-semibold text-orange-400">{uploadSummary.negative}</p>
+
+                    {/* Negative */}
+                    <div className="rounded-[1.75rem] border border-slate-700/70 bg-slate-950/90 p-5 shadow-xl shadow-slate-950/20">
+                      <div className="flex items-center gap-4">
+                        <span className="grid h-12 w-12 place-content-center rounded-2xl bg-orange-400/10 text-orange-400">
+                          <Frown className="h-6 w-6" />
+                        </span>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Negative</p>
+                          <p className="mt-2 text-3xl font-bold text-orange-400">{uploadSummary.negative}</p>
+                        </div>
+                      </div>
                     </div>
-                    <div className="rounded-[1.5rem] border border-slate-700/80 bg-slate-900/90 p-4 text-center">
-                      <p className="text-sm uppercase tracking-[0.25em] text-slate-500">Neutral</p>
-                      <p className="mt-3 text-3xl font-semibold text-slate-400">{uploadSummary.neutral || 0}</p>
+
+                    {/* Neutral */}
+                    <div className="rounded-[1.75rem] border border-slate-700/70 bg-slate-950/90 p-5 shadow-xl shadow-slate-950/20">
+                      <div className="flex items-center gap-4">
+                        <span className="grid h-12 w-12 place-content-center rounded-2xl bg-slate-400/10 text-slate-400">
+                          <Meh className="h-6 w-6" />
+                        </span>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Neutral</p>
+                          <p className="mt-2 text-3xl font-bold text-slate-300">{uploadSummary.neutral || 0}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
