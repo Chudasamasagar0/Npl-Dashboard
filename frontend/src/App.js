@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 import { Download, FileText, Sparkles, TrendingUp } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 import './App.css';
 
 const STOP_WORDS = [
@@ -425,7 +425,7 @@ function App() {
     }));
 
     // Generate AutoTable
-    doc.autoTable({
+    autoTable(doc, {
       columns: tableColumns,
       body: tableRows,
       startY: 57,
