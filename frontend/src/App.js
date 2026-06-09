@@ -218,7 +218,7 @@ function App() {
     return {
       label: meta.label,
       score,
-      confidence: sentimentLabel === 'Neutral' ? 65 : Math.round(Math.max(45, Math.min(98, score * 100 + 12))),
+      confidence: sentimentLabel === 'Neutral' ? 65 : Math.round(score * 100),
       color: meta.color,
       icon: meta.icon,
       explanation: buildExplanation(meta.label, keywords),
@@ -262,7 +262,7 @@ function App() {
           const analysis = {
             label: meta.label,
             score,
-            confidence: Math.round(Math.max(45, Math.min(98, score * 100 + 12))),
+            confidence: normalizedLabel === 'Neutral' ? 65 : Math.round(score * 100),
             color: meta.color,
             icon: meta.icon,
             explanation: buildExplanation(meta.label, keywords),
@@ -754,55 +754,55 @@ function App() {
                 </div>
 
                 {uploadSummary && (
-                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid gap-3 grid-cols-2">
                     {/* Total Rows */}
-                    <div className="rounded-[1.75rem] border border-slate-700/70 bg-slate-950/90 p-5 shadow-xl shadow-slate-950/20">
-                      <div className="flex items-center gap-4">
-                        <span className="grid h-12 w-12 place-content-center rounded-2xl bg-sky-400/10 text-sky-300">
-                          <Database className="h-6 w-6" />
+                    <div className="rounded-2xl border border-slate-700/60 bg-slate-950/90 p-4 shadow-md shadow-slate-950/10">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-10 w-10 shrink-0 place-content-center rounded-xl bg-sky-400/10 text-sky-300">
+                          <Database className="h-5 w-5" />
                         </span>
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Total Rows</p>
-                          <p className="mt-2 text-3xl font-bold text-white">{uploadSummary.total_records}</p>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 truncate">Total Rows</p>
+                          <p className="mt-0.5 text-xl font-bold text-white leading-none">{uploadSummary.total_records}</p>
                         </div>
                       </div>
                     </div>
 
                     {/* Positive */}
-                    <div className="rounded-[1.75rem] border border-slate-700/70 bg-slate-950/90 p-5 shadow-xl shadow-slate-950/20">
-                      <div className="flex items-center gap-4">
-                        <span className="grid h-12 w-12 place-content-center rounded-2xl bg-emerald-400/10 text-emerald-400">
-                          <Smile className="h-6 w-6" />
+                    <div className="rounded-2xl border border-slate-700/60 bg-slate-950/90 p-4 shadow-md shadow-slate-950/10">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-10 w-10 shrink-0 place-content-center rounded-xl bg-emerald-400/10 text-emerald-400">
+                          <Smile className="h-5 w-5" />
                         </span>
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Positive</p>
-                          <p className="mt-2 text-3xl font-bold text-emerald-400">{uploadSummary.positive}</p>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 truncate">Positive</p>
+                          <p className="mt-0.5 text-xl font-bold text-emerald-400 leading-none">{uploadSummary.positive}</p>
                         </div>
                       </div>
                     </div>
 
                     {/* Negative */}
-                    <div className="rounded-[1.75rem] border border-slate-700/70 bg-slate-950/90 p-5 shadow-xl shadow-slate-950/20">
-                      <div className="flex items-center gap-4">
-                        <span className="grid h-12 w-12 place-content-center rounded-2xl bg-orange-400/10 text-orange-400">
-                          <Frown className="h-6 w-6" />
+                    <div className="rounded-2xl border border-slate-700/60 bg-slate-950/90 p-4 shadow-md shadow-slate-950/10">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-10 w-10 shrink-0 place-content-center rounded-xl bg-orange-400/10 text-orange-400">
+                          <Frown className="h-5 w-5" />
                         </span>
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Negative</p>
-                          <p className="mt-2 text-3xl font-bold text-orange-400">{uploadSummary.negative}</p>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 truncate">Negative</p>
+                          <p className="mt-0.5 text-xl font-bold text-orange-400 leading-none">{uploadSummary.negative}</p>
                         </div>
                       </div>
                     </div>
 
                     {/* Neutral */}
-                    <div className="rounded-[1.75rem] border border-slate-700/70 bg-slate-950/90 p-5 shadow-xl shadow-slate-950/20">
-                      <div className="flex items-center gap-4">
-                        <span className="grid h-12 w-12 place-content-center rounded-2xl bg-slate-400/10 text-slate-400">
-                          <Meh className="h-6 w-6" />
+                    <div className="rounded-2xl border border-slate-700/60 bg-slate-950/90 p-4 shadow-md shadow-slate-950/10">
+                      <div className="flex items-center gap-3">
+                        <span className="grid h-10 w-10 shrink-0 place-content-center rounded-xl bg-slate-400/10 text-slate-400">
+                          <Meh className="h-5 w-5" />
                         </span>
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Neutral</p>
-                          <p className="mt-2 text-3xl font-bold text-slate-300">{uploadSummary.neutral || 0}</p>
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 truncate">Neutral</p>
+                          <p className="mt-0.5 text-xl font-bold text-slate-300 leading-none">{uploadSummary.neutral || 0}</p>
                         </div>
                       </div>
                     </div>
