@@ -409,24 +409,19 @@ function App() {
     doc.setFontSize(12);
     doc.text(neutral.toString(), 216, 48);
 
-    // Table Columns & Rows
-    const tableColumns = [
-      { header: 'Feedback Review Text', dataKey: 'text' },
-      { header: 'Sentiment', dataKey: 'sentiment' },
-      { header: 'Confidence', dataKey: 'confidence' },
-      { header: 'Timestamp', dataKey: 'dateTime' }
-    ];
+    // Table Headers & Rows (using standard simple arrays)
+    const tableHeaders = [['Feedback Review Text', 'Sentiment', 'Confidence', 'Timestamp']];
 
-    const tableRows = filteredHistory.map((entry) => ({
-      text: entry.text,
-      sentiment: entry.sentiment,
-      confidence: `${entry.confidence}%`,
-      dateTime: entry.dateTime
-    }));
+    const tableRows = filteredHistory.map((entry) => [
+      entry.text,
+      entry.sentiment,
+      `${entry.confidence}%`,
+      entry.dateTime
+    ]);
 
     // Generate AutoTable
     autoTable(doc, {
-      columns: tableColumns,
+      head: tableHeaders,
       body: tableRows,
       startY: 57,
       margin: { left: 14, right: 14, bottom: 20 },
@@ -447,21 +442,21 @@ function App() {
         fillColor: [250, 250, 250]
       },
       columnStyles: {
-        text: { cellWidth: 'auto' },
-        sentiment: { cellWidth: 32, fontStyle: 'bold' },
-        confidence: { cellWidth: 28, halign: 'center' },
-        dateTime: { cellWidth: 48 }
+        0: { cellWidth: 'auto' },
+        1: { cellWidth: 32, fontStyle: 'bold' },
+        2: { cellWidth: 28, halign: 'center' },
+        3: { cellWidth: 48 }
       },
-      didDrawCell: (data) => {
-        // Color code sentiment column cell text for premium feel
-        if (data.column.key === 'sentiment' && data.cell.section === 'body') {
+      didParseCell: (data) => {
+        // Color code sentiment column text (index 1) for premium feel
+        if (data.column.index === 1 && data.cell.section === 'body') {
           const val = data.cell.raw;
           if (val === 'Positive') {
-            doc.setTextColor(34, 197, 94); // Emerald 500
+            data.cell.styles.textColor = [34, 197, 94]; // Emerald 500
           } else if (val === 'Negative') {
-            doc.setTextColor(249, 115, 22); // Orange 500
+            data.cell.styles.textColor = [249, 115, 22]; // Orange 500
           } else {
-            doc.setTextColor(148, 163, 184); // Slate 400
+            data.cell.styles.textColor = [148, 163, 184]; // Slate 400
           }
         }
       },
@@ -487,7 +482,7 @@ function App() {
       }
     });
 
-    doc.save(`sentiment-analytics-report-${Date.now()}.pdf`);
+    doc.save('sentiment-analytics-report.pdf');
   };
 
   return (
